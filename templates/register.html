@@ -1,0 +1,81 @@
+{% set chosen_role = selected_role | default('standard') %}
+{% extends 'base.html' %}
+
+{% block title %}{{ 'Nuevo usuario' if admin_mode else 'Crear cuenta' }} - BanBif Upgrade{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+        <div class="card form-card shadow">
+            <div class="card-body p-4">
+                <h1 class="h4 mb-2 text-center text-brand">{{ 'Registrar usuario' if admin_mode else 'Crear cuenta' }}</h1>
+                {% if admin_mode %}
+                <p class="text-muted small text-center mb-4">Solo administradores pueden crear cuentas desde el panel.</p>
+                {% else %}
+                <p class="text-muted small text-center mb-4">Registra usuarios operativos o administrativos del proyecto.</p>
+                {% endif %}
+                <form method="post" novalidate>
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Usuario</label>
+                        <input type="text" class="form-control" id="username" name="username" value="{{ request.form.username }}" required autofocus>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Contrasena</label>
+                        <input type="password" class="form-control" id="password" name="password" minlength="8" required>
+                        <div class="form-text">Minimo 8 caracteres.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="confirm" class="form-label">Confirmar contrasena</label>
+                        <input type="password" class="form-control" id="confirm" name="confirm" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Rol de acceso</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="role" id="role_standard" value="standard" {% if chosen_role != 'admin' %}checked{% endif %}>
+                            <label class="form-check-label" for="role_standard">Operativo (visualiza y carga avances segun permisos)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="role" id="role_admin" value="admin" {% if chosen_role == 'admin' %}checked{% endif %}>
+                            <label class="form-check-label" for="role_admin">Administrativo (gestion de usuarios y cargas)</label>
+                        </div>
+                    </div>
+                    {% if admin_code_required %}
+                    <div class="mb-3" id="admin-code-block" style="display:none;">
+                        <label for="admin_code" class="form-label">Codigo de verificacion</label>
+                        <input type="password" class="form-control" id="admin_code" name="admin_code" placeholder="Ingresa el codigo entregado">
+                        <div class="form-text">Requerido solo para cuentas administrativas.</div>
+                    </div>
+                    {% endif %}
+                    <div class="d-grid gap-2 mt-4">
+                        <button type="submit" class="btn btn-primary">{{ 'Crear usuario' if admin_mode else 'Registrarme' }}</button>
+                        {% if admin_mode %}
+                        <a class="btn btn-outline-secondary" href="{{ url_for('dashboard') }}">Volver al dashboard</a>
+                        {% else %}
+                        <a class="btn btn-outline-secondary" href="{{ url_for('login') }}">Ya tengo cuenta</a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const adminRadio = document.getElementById('role_admin');
+const standardRadio = document.getElementById('role_standard');
+const codeBlock = document.getElementById('admin-code-block');
+function toggleCode() {
+    if (!codeBlock || !adminRadio) {
+        return;
+    }
+    codeBlock.style.display = adminRadio.checked ? 'block' : 'none';
+}
+if (adminRadio && standardRadio) {
+    toggleCode();
+    adminRadio.addEventListener('change', toggleCode);
+    standardRadio.addEventListener('change', toggleCode);
+}
+</script>
+{% endblock %}

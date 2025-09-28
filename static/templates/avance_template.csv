@@ -1,0 +1,2 @@
+id,ubicacion,nom_sede,categoria_trab,nombre_completo,perfil_imagen,marca,modelo,serial_num,hostname,ip_equipo,email_trabajo,fecha_estado,estado,estado_coordinacion,estado_upgrade,fecha_programada,fecha_ejecucion,notas
+001,SEDE PRINCIPAL,Centro Corporativo,UPGRADE + WIN11,Nombre Ejemplo,OFICINA PRINCIPAL ADMINISTRATIVO,HP,EliteBook 840,5CD3051HBZ,BANCAINMOBIOP01,10.10.2.15,usuario@banbif.com,2025-09-29,REALIZADO,REALIZADO,PROGRAMADO,2025-09-27,2025-09-29,Observaciones

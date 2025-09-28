@@ -1,0 +1,184 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - BanBif Upgrade{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+{% endblock %}
+
+{% block content %}
+<div class="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3 dashboard-header">
+    <div>
+        <h1 class="page-title text-brand mb-1">Dashboard Ejecutivo</h1>
+        <p class="text-muted mb-0">Seguimiento del programa Upgrade Windows 11 &middot; BanBif &amp; Team Support.</p>
+    </div>
+    <div class="d-flex align-items-end gap-3 flex-wrap justify-content-end flex-grow-1">
+        <div class="search-wrapper">
+            <label for="filter-hostname" class="form-label mb-1">Hostname</label>
+            <div class="input-group hostname-group">
+                <input type="text" id="filter-hostname" class="form-control" placeholder="Buscar por hostname">
+                <button id="filter-hostname-btn" class="btn btn-outline-primary" type="button">Buscar</button>
+            </div>
+        </div>
+        {% if current_user and current_user['role'] == 'admin' %}
+        <div class="d-flex gap-2 admin-actions">
+            <a class="btn btn-outline-primary" href="{{ url_for('upload') }}">Actualizar datos</a>
+            <a class="btn btn-primary" href="{{ url_for('download_template') }}">Plantilla CSV</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card filter-card shadow-sm mb-4">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-xl-2 col-md-4">
+                <label for="filter-ubicacion" class="form-label">Ubicaci&oacute;n</label>
+                <select id="filter-ubicacion" class="form-select" data-filter="ubicacion">
+                    <option value="">Todas</option>
+                </select>
+            </div>
+            <div class="col-xl-2 col-md-4">
+                <label for="filter-nom_sede" class="form-label">Sede</label>
+                <select id="filter-nom_sede" class="form-select" data-filter="nom_sede">
+                    <option value="">Todas</option>
+                </select>
+            </div>
+            <div class="col-xl-2 col-md-4">
+                <label for="filter-categoria_trab" class="form-label">Categor&iacute;a</label>
+                <select id="filter-categoria_trab" class="form-select" data-filter="categoria_trab">
+                    <option value="">Todas</option>
+                </select>
+            </div>
+            <div class="col-xl-2 col-md-4">
+                <label for="filter-fecha-inicio" class="form-label">Fecha desde</label>
+                <input id="filter-fecha-inicio" class="form-control filter-date" type="date" data-date="fecha_inicio">
+            </div>
+            <div class="col-xl-2 col-md-4">
+                <label for="filter-fecha-fin" class="form-label">Fecha hasta</label>
+                <input id="filter-fecha-fin" class="form-control filter-date" type="date" data-date="fecha_fin">
+            </div>
+            <div class="col-xl-2 col-md-4 text-md-end">
+                <button id="filters-reset" type="button" class="btn btn-outline-secondary w-100 w-md-auto">Limpiar filtros</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-12">
+        <div class="row g-4">
+            <div class="col-xl-3 col-md-6">
+                <div class="metric-card shadow-sm">
+                    <p class="metric-label">Usuarios totales</p>
+                    <h2 class="metric-value" id="metric-total">0</h2>
+                    <span class="metric-subtitle">Registros activos en la base</span>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="metric-card shadow-sm">
+                    <p class="metric-label">Estado: Realizado</p>
+                    <h2 class="metric-value" id="metric-completed">0</h2>
+                    <span class="metric-subtitle" id="metric-completed-percentage">0 % del total</span>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="metric-card shadow-sm">
+                    <p class="metric-label">En progreso</p>
+                    <h2 class="metric-value" id="metric-progress">0</h2>
+                    <span class="metric-subtitle" id="metric-progress-percentage">0 % del total</span>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="metric-card shadow-sm accent">
+                    <p class="metric-label">Pendientes / incidencias</p>
+                    <h2 class="metric-value" id="metric-pending">0</h2>
+                    <span class="metric-subtitle">Incluye usuarios sin respuesta y no aplica</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-6">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2 class="card-title mb-0">Programaci&oacute;n de usuarios</h2>
+                </div>
+                <canvas id="statusChart" height="220"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-6">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2 class="card-title mb-0">Estado del upgrade</h2>
+                    <span class="text-muted small">Resumen por etapa</span>
+                </div>
+                <canvas id="upgradeChart" height="220"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-8">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2 class="card-title mb-0">Actualizaciones por fecha</h2>
+                    <span class="text-muted small">Conteo por fecha de estado</span>
+                </div>
+                <canvas id="timelineChart" height="240"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body">
+                <h2 class="card-title mb-3">Alertas r&aacute;pidas</h2>
+                <ul class="list-unstyled alert-list" id="alert-list">
+                    <li class="text-muted">Sin alertas registradas</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="card shadow-sm border-0">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2 class="card-title mb-0">&Uacute;ltimas actualizaciones</h2>
+                    <span class="text-muted small">Top 10 m&aacute;s recientes</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle" id="recent-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>Nombre</th>
+                                <th>Ubicaci&oacute;n</th>
+                                <th>Sede</th>
+                                <th>Categor&iacute;a</th>
+                                <th>Estado</th>
+                                <th>Fecha estado</th>
+                                <th>Notas</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="8" class="text-center text-muted">Sin registros para mostrar</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}

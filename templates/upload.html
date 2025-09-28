@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+
+{% block title %}Cargar avances - BanBif Upgrade{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-xl-8 col-lg-10">
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-body p-4">
+                <div class="d-flex align-items-start justify-content-between flex-wrap gap-3 mb-3">
+                    <div>
+                        <h1 class="h4 mb-1 text-brand">Carga de avances</h1>
+                        <p class="text-muted mb-0">Sube un archivo CSV con el estado diario consolidado por la coordinaci&oacute;n.</p>
+                    </div>
+                    <a class="btn btn-outline-primary" href="{{ url_for('download_template') }}">Descargar plantilla</a>
+                </div>
+                <form method="post" enctype="multipart/form-data" class="upload-form" novalidate>
+                    <div class="mb-3">
+                        <label for="file" class="form-label">Archivo CSV</label>
+                        <input class="form-control" type="file" id="file" name="file" accept=".csv" required>
+                        <div class="form-text">El archivo debe incluir una columna <code>id</code> &uacute;nica por usuario/equipo.</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Procesar carga</button>
+                </form>
+                {% if summary %}
+                <div class="mt-4">
+                    <h2 class="h6 text-uppercase text-muted">Resumen de la carga</h2>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="status-card bg-success-subtle text-success-emphasis">
+                                <span class="label">Registros nuevos</span>
+                                <span class="value">{{ summary.inserted }}</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="status-card bg-info-subtle text-info-emphasis">
+                                <span class="label">Registros actualizados</span>
+                                <span class="value">{{ summary.updated }}</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="status-card bg-primary-subtle text-primary-emphasis">
+                                <span class="label">Total procesado</span>
+                                <span class="value">{{ summary.total }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                <h2 class="h6 text-uppercase text-muted">Columnas aceptadas</h2>
+                <p class="mb-3">Incluye exactamente los siguientes encabezados (orden libre). Se ignoran columnas adicionales.</p>
+                <div class="row">
+                    <div class="col-md-6">
+                        <ul class="list-unstyled info-list">
+                            <li><code>id</code> (obligatorio)</li>
+                            <li><code>ubicaci&oacute;n</code></li>
+                            <li><code>nom_sede</code></li>
+                            <li><code>categoria_trab</code></li>
+                            <li><code>nombre_completo</code></li>
+                            <li><code>perfil_imagen</code></li>
+                            <li><code>marca</code></li>
+                            <li><code>modelo</code></li>
+                            <li><code>serial_num</code></li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <ul class="list-unstyled info-list">
+                            <li><code>hostname</code></li>
+                            <li><code>ip_equipo</code></li>
+                            <li><code>email_trabajo</code></li>
+                            <li><code>fecha_estado</code></li>
+                            <li><code>estado</code></li>
+                            <li><code>notas</code></li>
+                        </ul>
+                    </div>
+                </div>
+                <h2 class="h6 text-uppercase text-muted mt-4">Valores admitidos para <code>estado</code></h2>
+                <p class="mb-1">Utiliza uno de los siguientes estados estandarizados:</p>
+                <div class="status-badges">
+                    {% for s in ['PROGRAMADO','REPROGRAMADO','EN PROCESO','REALIZADO','USER NO ASISTIO','USER SIN RESPUESTA','NO APLICA UPGRADE','INCIDENCIA UPGRADE','PENDIENTE'] %}
+                    <span class="badge bg-light text-primary border border-primary-subtle me-1 mb-1">{{ s }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

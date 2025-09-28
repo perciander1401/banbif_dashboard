@@ -1,0 +1,20 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: banbif-dashboard
+    restart: always
+    expose:
+      - "5000"
+    environment:
+      BANBIF_DASHBOARD_SECRET: "${BANBIF_DASHBOARD_SECRET}"
+      BANBIF_ADMIN_CODE: "${BANBIF_ADMIN_CODE}"
+      GUNICORN_WORKERS: "${GUNICORN_WORKERS:-4}"
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:5000/health').status==200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
