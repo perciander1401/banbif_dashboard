@@ -1,4 +1,4 @@
-﻿import os
+import os
 import sqlite3
 import csv
 import io
@@ -20,7 +20,9 @@ from flask import (
     flash,
     jsonify,
     send_from_directory,
+    abort,
 )
+
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
@@ -76,7 +78,7 @@ app.config.update(
     SECRET_KEY=os.environ.get("BANBIF_DASHBOARD_SECRET", secrets.token_hex(16)),
     DATABASE=str(DB_PATH),
     MAX_CONTENT_LENGTH=5 * 1024 * 1024,
-    ADMIN_INVITE_CODE=os.environ.get("BANBIF_ADMIN_CODE", "BANBIF2025"),
+    INITIAL_ADMIN_PASSWORD=os.environ.get("BANBIF_ADMIN_CODE"),
 )
 @app.route("/health")
 def health():
@@ -145,6 +147,24 @@ def ensure_project_schema(db: sqlite3.Connection) -> None:
         db.commit()
 
 
+
+
+def ensure_initial_admin() -> None:
+    password = app.config.get("INITIAL_ADMIN_PASSWORD")
+    if not password:
+        app.logger.warning("BANBIF_ADMIN_CODE no esta definido; no se creo el administrador inicial.")
+        return
+    db = get_db()
+    existing = db.execute("SELECT 1 FROM users WHERE role = 'admin' LIMIT 1").fetchone()
+    if existing:
+        return
+    db.execute(
+        "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+        ("admin", hash_password(password), "admin"),
+    )
+    db.commit()
+    app.logger.info("Usuario administrador inicial 'admin' creado.")
+
 def init_db() -> None:
     db = get_db()
     db.executescript(
@@ -160,6 +180,7 @@ def init_db() -> None:
     )
     ensure_user_role_column(db)
     ensure_project_schema(db)
+    ensure_initial_admin()
 
 
 def hash_password(password: str) -> str:
@@ -260,8 +281,6 @@ def attempt_user_creation(
     password: str,
     confirm: str,
     role: str,
-    admin_code: str,
-    require_admin_code: bool,
 ) -> Tuple[bool, str]:
     username = (username or "").strip()
     role = (role or "standard").strip()
@@ -275,8 +294,6 @@ def attempt_user_creation(
         return False, "La contrasena debe tener al menos 8 caracteres"
     if role not in {"standard", "admin"}:
         return False, "Rol invalido"
-    if role == "admin" and require_admin_code and admin_code != app.config["ADMIN_INVITE_CODE"]:
-        return False, "Codigo de administrador incorrecto"
 
     db = get_db()
     try:
@@ -297,30 +314,7 @@ def inject_globals():
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
-    if g.user:
-        return redirect(url_for("dashboard"))
-    selected_role = request.form.get("role", "standard")
-    if request.method == "POST":
-        success, error = attempt_user_creation(
-            username=request.form.get("username", ""),
-            password=request.form.get("password", ""),
-            confirm=request.form.get("confirm", ""),
-            role=selected_role,
-            admin_code=request.form.get("admin_code", ""),
-            require_admin_code=True,
-        )
-        if success:
-            flash("Registro exitoso. Ahora puedes iniciar sesion.", "success")
-            return redirect(url_for("login"))
-        flash(error, "danger")
-    return render_template(
-        "register.html",
-        admin_code_required=True,
-        admin_mode=False,
-        selected_role=selected_role,
-    )
-
-
+    abort(404)
 @app.route("/admin/usuarios/nuevo", methods=["GET", "POST"])
 @login_required
 @admin_required
@@ -332,8 +326,6 @@ def admin_new_user():
             password=request.form.get("password", ""),
             confirm=request.form.get("confirm", ""),
             role=selected_role,
-            admin_code="",
-            require_admin_code=False,
         )
         if success:
             flash("Usuario creado correctamente", "success")
@@ -341,7 +333,6 @@ def admin_new_user():
         flash(error, "danger")
     return render_template(
         "register.html",
-        admin_code_required=False,
         admin_mode=True,
         selected_role=selected_role,
     )
@@ -670,4 +661,7 @@ if __name__ == "__main__":
     with app.app_context():
         init_db()
     app.run(debug=True)
+
+
+
 
