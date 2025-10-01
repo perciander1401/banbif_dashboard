@@ -242,43 +242,53 @@ function renderSchedule(scheduleCounts, scheduleBrands) {
         charts.timeline.destroy();
     }
 
-    const entries = Object.entries(scheduleCounts || {}).sort((a, b) => {
-        return new Date(a[0]) - new Date(b[0]);
-    });
-
+    const entries = Object.entries(scheduleCounts || {}).sort((a, b) => compareIsoDates(a[0], b[0]));
     const labels = entries.map(([date]) => formatDateLabel(date));
-    const datasets = [];
-    const brandOrder = new Set();
+    const brandCountsPerDate = entries.map(([date]) => scheduleBrands[date] || {});
 
-    entries.forEach(([date]) => {
-        const brands = scheduleBrands[date] || {};
-        Object.keys(brands).forEach((brand) => {
-            if (brand) brandOrder.add(brand);
-        });
-    });
-
-    const brandList = Array.from(brandOrder);
-    entries.forEach(([date]) => {
-        const brands = scheduleBrands[date] || {};
-        brandList.forEach((brand, idx) => {
-            if (!datasets[idx]) {
-                datasets[idx] = {
-                    label: brand,
-                    data: Array(entries.length).fill(0),
-                    backgroundColor: palette[idx % palette.length],
-                    stack: 'timeline',
-                    datalabels: {
-                        display: true,
-                        anchor: 'end',
-                        align: 'top',
-                        color: '#1f2937',
-                        formatter: (value) => (value > 0 ? `${brand}: ${value}` : '')
-                    }
-                };
+    const brandSet = new Set();
+    brandCountsPerDate.forEach((counts) => {
+        Object.keys(counts).forEach((brand) => {
+            if (brand) {
+                brandSet.add(brand);
             }
-            datasets[idx].data[entries.indexOf(entries.find((item) => item[0] === date))] = brands[brand] || 0;
         });
     });
+
+    const brandList = Array.from(brandSet);
+    const datasets = [];
+
+    if (brandList.length === 0) {
+        datasets.push({
+            label: 'Total',
+            data: entries.map(([, value]) => value),
+            backgroundColor: palette[0],
+            stack: 'timeline',
+            datalabels: {
+                display: true,
+                anchor: 'end',
+                align: 'top',
+                color: '#1f2937',
+                formatter: (value) => (value > 0 ? `Total: ${value}` : '')
+            }
+        });
+    } else {
+        brandList.forEach((brand, idx) => {
+            datasets.push({
+                label: brand,
+                data: brandCountsPerDate.map((counts) => counts[brand] || 0),
+                backgroundColor: palette[idx % palette.length],
+                stack: 'timeline',
+                datalabels: {
+                    display: true,
+                    anchor: 'end',
+                    align: 'top',
+                    color: '#1f2937',
+                    formatter: (value) => (value > 0 ? `${brand}: ${value}` : '')
+                }
+            });
+        });
+    }
 
     charts.timeline = new Chart(ctx, {
         type: 'bar',
@@ -374,29 +384,6 @@ function renderTable(rows) {
     });
 }
 
-function formatDateLabel(value) {
-    if (!value) return '';
-    const parsed = new Date(value);
-    if (!Number.isNaN(parsed.valueOf())) {
-        return parsed.toLocaleDateString('es-PE', { year: 'numeric', month: 'short', day: 'numeric' });
-    }
-    return value;
-}
-
-function formatDateTime(value) {
-    if (!value) return '';
-    const parsed = new Date(value);
-    if (!Number.isNaN(parsed.valueOf())) {
-        return parsed.toLocaleString('es-PE', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-    }
-    return value;
-}
 
 function escapeHtml(value) {
     if (value === null || value === undefined) return '';
@@ -406,4 +393,66 @@ function escapeHtml(value) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+}
+
+function parseIsoDateParts(value) {
+    if (!value) return null;
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+    if (!match) return null;
+    return { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
+}
+
+function compareIsoDates(a, b) {
+    const da = parseIsoDateParts(a);
+    const db = parseIsoDateParts(b);
+    if (da && db) {
+        if (da.year !== db.year) return da.year - db.year;
+        if (da.month !== db.month) return da.month - db.month;
+        return da.day - db.day;
+    }
+    return a.localeCompare(b);
+}
+
+function formatDateLabel(value) {
+    if (!value) return '';
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+    if (match) {
+        const [, year, month, day] = match;
+        return `${day}/${month}/${year}`;
+    }
+    return value;
+}
+
+function formatDateTime(value) {
+    if (!value) return '';
+    const match = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/.exec(value.trim());
+    if (match) {
+        const [, year, month, day, hour = '00', minute = '00'] = match;
+        return `${day}/${month}/${year} ${hour}:${minute}`;
+    }
+    return value;
+}
+
+
+function convertDateText(value) {
+    if (!value) return '';
+    const isoRegex = /^(\d{4})-(\d{2})-(\d{2})$/;
+    const euroRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+    const usRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+    const isoMatch = isoRegex.exec(value.trim());
+    if (isoMatch) {
+        const [, year, month, day] = isoMatch;
+        return `${day}/${month}/${year}`;
+    }
+    const euroMatch = euroRegex.exec(value.trim());
+    if (euroMatch) {
+        const [, day, month, year] = euroMatch;
+        return `${day}/${month}/${year}`;
+    }
+    const usMatch = usRegex.exec(value.trim());
+    if (usMatch) {
+        const [, month, day, year] = usMatch;
+        return `${day}/${month}/${year}`;
+    }
+    return value;
 }

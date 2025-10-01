@@ -205,6 +205,30 @@ def normalize_header(header: str) -> str:
     ascii_only = "".join(c for c in normalized if not unicodedata.combining(c))
     return ascii_only.strip().lower().replace(" ", "_")
 
+def normalize_date(value: str) -> str:
+    if not value:
+        return ""
+    value = value.strip()
+    if not value:
+        return ""
+    from datetime import datetime
+    patterns = [
+        "%Y-%m-%d",
+        "%d/%m/%Y",
+        "%m/%d/%Y",
+        "%Y/%m/%d",
+        "%d-%m-%Y",
+        "%m-%d-%Y",
+    ]
+    for pattern in patterns:
+        try:
+            dt = datetime.strptime(value, pattern)
+            return dt.strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return value
+
+
 
 CSV_FIELD_MAP = {
     "id": "record_id",
@@ -443,6 +467,9 @@ def upload():
             for field in ("estado", "estado_coordinacion", "estado_upgrade"):
                 if field in normalized_row and isinstance(normalized_row[field], str):
                     normalized_row[field] = normalized_row[field].upper()
+            for field in ("fecha_estado", "fecha_programada", "fecha_ejecucion"):
+                if field in normalized_row:
+                    normalized_row[field] = normalize_date(normalized_row[field])
             mapped_rows.append(normalized_row)
 
         if not mapped_rows:

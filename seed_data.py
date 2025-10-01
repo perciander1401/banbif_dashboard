@@ -1,7 +1,7 @@
-import unicodedata
-from app import app, get_db, init_db, hash_password, PROJECT_COLUMNS
+from app import app, get_db, init_db, hash_password, PROJECT_COLUMNS, normalize_date
 import csv
 from pathlib import Path
+import unicodedata
 
 FIELDS = PROJECT_COLUMNS
 
@@ -45,6 +45,9 @@ def seed():
                         normalized_row[norm_key] = value.strip()
                     else:
                         normalized_row[norm_key] = value
+                for field in ("fecha_estado", "fecha_programada", "fecha_ejecucion"):
+                    if field in normalized_row:
+                        normalized_row[field] = normalize_date(normalized_row[field])
                 record_id = normalized_row.get("id") or normalized_row.get("record_id")
                 if not record_id:
                     continue
@@ -52,12 +55,9 @@ def seed():
                 params = [record_id]
                 for field in FIELDS[1:]:
                     params.append(normalized_row.get(field))
-                if params[13]:
-                    params[13] = params[13].upper()
-                if params[14]:
-                    params[14] = params[14].upper()
-                if params[15]:
-                    params[15] = params[15].upper()
+                for index in (13, 14, 15):
+                    if params[index]:
+                        params[index] = params[index].upper()
                 db.execute(
                     """
                     INSERT INTO project_records (
@@ -72,6 +72,7 @@ def seed():
                 inserted += 1
         db.commit()
         print(f"Registros insertados: {inserted}")
+
 
 if __name__ == "__main__":
     seed()
