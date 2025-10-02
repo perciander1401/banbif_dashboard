@@ -255,7 +255,7 @@ code {
     flex-direction: column;
 }
 
-.search-wrapper .hostname-group {
+.search-wrapper .search-group {
     max-width: 280px;
 }
 .dashboard-header {
@@ -276,7 +276,7 @@ code {
     .search-wrapper {
         width: 100%;
     }
-    .hostname-group {
+    .search-group {
         width: 100%;
     }
 }

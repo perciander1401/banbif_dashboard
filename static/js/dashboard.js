@@ -11,16 +11,25 @@ const palette = [
     '#7f8c8d',
     '#1c4587'
 ];
+
+function timelineColor(index) {
+    const hue = (index * 37) % 360;
+    return `hsl(${hue}, 65%, 55%)`;
+}
 const selectFilters = ['ubicacion', 'nom_sede', 'categoria_trab'];
+const estadoFilters = ['estado'];
 const dateFilters = ['fecha_inicio', 'fecha_fin'];
 let currentFilters = {
     ubicacion: '',
     nom_sede: '',
     categoria_trab: '',
+    estado: '',
     fecha_inicio: '',
     fecha_fin: '',
+    nombre: '',
     hostname: ''
 };
+let nombreDebounce = null;
 let hostnameDebounce = null;
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -38,6 +47,15 @@ function setupFilters() {
         });
     });
 
+    estadoFilters.forEach((field) => {
+        const select = document.getElementById(`filter-${field}`);
+        if (!select) return;
+        select.addEventListener('change', () => {
+            currentFilters[field] = select.value || '';
+            fetchSummary();
+        });
+    });
+
     dateFilters.forEach((field) => {
         const input = document.querySelector(`[data-date="${field}"]`);
         if (!input) return;
@@ -46,6 +64,31 @@ function setupFilters() {
             fetchSummary();
         });
     });
+
+    const nameInput = document.getElementById('filter-nombre');
+    const nameBtn = document.getElementById('filter-nombre-btn');
+    if (nameInput) {
+        nameInput.addEventListener('input', () => {
+            if (nombreDebounce) clearTimeout(nombreDebounce);
+            nombreDebounce = setTimeout(() => {
+                currentFilters.nombre = nameInput.value.trim();
+                fetchSummary();
+            }, 400);
+        });
+        nameInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                currentFilters.nombre = nameInput.value.trim();
+                fetchSummary();
+            }
+        });
+    }
+    if (nameBtn && nameInput) {
+        nameBtn.addEventListener('click', () => {
+            currentFilters.nombre = nameInput.value.trim();
+            fetchSummary();
+        });
+    }
 
     const hostnameInput = document.getElementById('filter-hostname');
     const hostnameBtn = document.getElementById('filter-hostname-btn');
@@ -80,11 +123,18 @@ function setupFilters() {
                 const select = document.getElementById(`filter-${field}`);
                 if (select) select.value = '';
             });
+            estadoFilters.forEach((field) => {
+                currentFilters[field] = '';
+                const select = document.getElementById(`filter-${field}`);
+                if (select) select.value = '';
+            });
             dateFilters.forEach((field) => {
                 currentFilters[field] = '';
                 const input = document.querySelector(`[data-date="${field}"]`);
                 if (input) input.value = '';
             });
+            if (nameInput) nameInput.value = '';
+            currentFilters.nombre = '';
             if (hostnameInput) hostnameInput.value = '';
             currentFilters.hostname = '';
             fetchSummary();
@@ -95,7 +145,7 @@ function setupFilters() {
 async function fetchSummary() {
     try {
         const params = new URLSearchParams();
-        [...selectFilters, ...dateFilters, 'hostname'].forEach((field) => {
+        [...selectFilters, ...estadoFilters, ...dateFilters, 'nombre', 'hostname'].forEach((field) => {
             const value = currentFilters[field];
             if (value) params.append(field, value);
         });
@@ -107,7 +157,9 @@ async function fetchSummary() {
         const data = await response.json();
         renderSelectFilters(data.filters || {});
         renderDateFilters(data.date_filters || {});
+        renderNameFilter(data.name_filter || '');
         renderHostnameFilter(data.hostname_filter || '');
+        renderEstadoFilter(data.estado_filter || '', data.estado_options || []);
         renderMetrics(data);
         renderCharts(data);
         renderSchedule(data.schedule, data.schedule_brands || {});
@@ -148,6 +200,30 @@ function renderDateFilters(dateFilters) {
         inputFin.value = value;
         currentFilters.fecha_fin = value;
     }
+}
+
+function renderNameFilter(value) {
+    const nameInput = document.getElementById('filter-nombre');
+    if (nameInput) {
+        nameInput.value = value || '';
+        currentFilters.nombre = nameInput.value.trim();
+    }
+}
+
+
+function renderEstadoFilter(selected, options) {
+    const estadoSelect = document.getElementById('filter-estado');
+    if (!estadoSelect) return;
+
+    const opts = ['<option value="">Todos</option>'];
+    (options || []).forEach((estado) => {
+        const safeValue = escapeHtml(estado);
+        const isSelected = selected && selected.toUpperCase() === estado.toUpperCase();
+        opts.push(`<option value="${safeValue}" ${isSelected ? 'selected' : ''}>${safeValue}</option>`);
+    });
+    estadoSelect.innerHTML = opts.join('');
+    estadoSelect.value = selected || '';
+    currentFilters.estado = estadoSelect.value || '';
 }
 
 function renderHostnameFilter(value) {
@@ -234,6 +310,23 @@ function drawDoughnut(canvasId, dataset) {
     });
 }
 
+
+function brandSegmentColor(baseColor, segmentIndex, totalSegments) {
+    const match = /hsl\((\d+),\s*([\d.]+)%?,\s*([\d.]+)%?\)/i.exec(baseColor);
+    if (!match) return baseColor;
+    const hue = Number(match[1]);
+    const saturation = Number(match[2]);
+    const lightness = Number(match[3]);
+    const minLight = 30;
+    const maxLight = 75;
+    if (totalSegments <= 1) {
+        return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+    }
+    const step = (maxLight - minLight) / Math.max(totalSegments - 1, 1);
+    const value = Math.min(maxLight, Math.max(minLight, minLight + step * segmentIndex));
+    return `hsl(${hue}, ${saturation}%, ${value}%)`;
+}
+
 function renderSchedule(scheduleCounts, scheduleBrands) {
     const ctx = document.getElementById('timelineChart');
     if (!ctx) return;
@@ -244,52 +337,75 @@ function renderSchedule(scheduleCounts, scheduleBrands) {
 
     const entries = Object.entries(scheduleCounts || {}).sort((a, b) => compareIsoDates(a[0], b[0]));
     const labels = entries.map(([date]) => formatDateLabel(date));
-    const brandCountsPerDate = entries.map(([date]) => scheduleBrands[date] || {});
+    const totals = entries.map(([, value]) => value);
+    const rawBrandCounts = entries.map(([date]) => scheduleBrands[date] || {});
+    const brandCountsPerDate = rawBrandCounts.map((counts) => {
+        const normalized = {};
+        Object.entries(counts).forEach(([brand, value]) => {
+            const label = (brand && brand.trim()) || 'Sin marca';
+            const numericValue = Number(value) || 0;
+            if (numericValue > 0) {
+                normalized[label] = (normalized[label] || 0) + numericValue;
+            }
+        });
+        return normalized;
+    });
+    const baseColors = entries.map((_, idx) => timelineColor(idx));
 
     const brandSet = new Set();
     brandCountsPerDate.forEach((counts) => {
-        Object.keys(counts).forEach((brand) => {
-            if (brand) {
-                brandSet.add(brand);
-            }
+        Object.keys(counts).forEach((label) => {
+            brandSet.add(label);
         });
     });
-
     const brandList = Array.from(brandSet);
-    const datasets = [];
+
+    let datasets = [];
 
     if (brandList.length === 0) {
-        datasets.push({
-            label: 'Total',
-            data: entries.map(([, value]) => value),
-            backgroundColor: palette[0],
-            stack: 'timeline',
-            datalabels: {
-                display: true,
-                anchor: 'end',
-                align: 'top',
-                color: '#1f2937',
-                formatter: (value) => (value > 0 ? `Total: ${value}` : '')
-            }
-        });
-    } else {
-        brandList.forEach((brand, idx) => {
-            datasets.push({
-                label: brand,
-                data: brandCountsPerDate.map((counts) => counts[brand] || 0),
-                backgroundColor: palette[idx % palette.length],
-                stack: 'timeline',
+        datasets = [
+            {
+                label: 'Total actualizaciones',
+                data: totals,
+                backgroundColor: baseColors,
+                hoverBackgroundColor: baseColors,
+                borderRadius: 8,
+                borderSkipped: false,
                 datalabels: {
                     display: true,
                     anchor: 'end',
                     align: 'top',
                     color: '#1f2937',
-                    formatter: (value) => (value > 0 ? `${brand}: ${value}` : '')
+                    formatter: (value) => (value > 0 ? value : '')
                 }
-            });
+            }
+        ];
+    } else {
+        datasets = brandList.map((brandLabel, brandIdx) => {
+            const colors = baseColors.map((color) => brandSegmentColor(color, brandIdx, brandList.length));
+            return {
+                label: brandLabel,
+                data: brandCountsPerDate.map((counts) => counts[brandLabel] || 0),
+                backgroundColor: colors,
+                hoverBackgroundColor: colors,
+                borderColor: '#ffffff',
+                borderWidth: 2,
+                borderSkipped: false,
+                borderRadius: 0,
+                stack: 'timeline',
+                datalabels: {
+                    display: true,
+                    anchor: 'center',
+                    align: 'center',
+                    color: '#ffffff',
+                    font: { weight: '600', size: 11 },
+                    formatter: (value) => (value > 0 ? value : '')
+                }
+            };
         });
     }
 
+    const stacked = brandList.length > 0;
     charts.timeline = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -300,26 +416,43 @@ function renderSchedule(scheduleCounts, scheduleBrands) {
             responsive: true,
             scales: {
                 x: {
-                    stacked: true,
+                    stacked,
                     ticks: { color: '#30425f' },
                     grid: { display: false },
                 },
                 y: {
-                    stacked: true,
+                    stacked,
+                    beginAtZero: true,
                     ticks: { color: '#30425f' },
                     grid: { color: 'rgba(0, 79, 163, 0.08)' },
-                    beginAtZero: true,
                 },
             },
             plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: { color: '#30425f' },
+                legend: stacked ? { position: 'bottom', labels: { color: '#30425f' } } : { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: (context) => {
+                            const value = context.parsed.y;
+                            if (!value) return '';
+                            if (stacked) {
+                                return `${context.dataset.label}: ${value}`;
+                            }
+                            return `Total: ${value}`;
+                        },
+                        footer: (context) => {
+                            if (!stacked) return '';
+                            const idx = context[0]?.dataIndex ?? -1;
+                            if (idx < 0) return '';
+                            return [`Total: ${totals[idx]}`];
+                        },
+                    },
                 },
             },
         },
     });
 }
+
+
 
 function renderAlerts(data) {
     const alertList = document.getElementById('alert-list');
@@ -360,7 +493,7 @@ function renderTable(rows) {
     if (!rows || rows.length === 0) {
         const tr = document.createElement('tr');
         const td = document.createElement('td');
-        td.colSpan = 8;
+        td.colSpan = 9;
         td.className = 'text-center text-muted';
         td.textContent = 'Sin registros para mostrar';
         tr.appendChild(td);
@@ -373,6 +506,7 @@ function renderTable(rows) {
         tr.innerHTML = `
             <td>${escapeHtml(row.record_id) || '-'}</td>
             <td>${escapeHtml(row.nombre_completo) || '-'}</td>
+            <td>${escapeHtml(row.hostname) || '-'}</td>
             <td>${escapeHtml(row.ubicacion) || '-'}</td>
             <td>${escapeHtml(row.nom_sede) || '-'}</td>
             <td>${escapeHtml(row.categoria_trab) || '-'}</td>

@@ -14,11 +14,24 @@
     </div>
     <div class="d-flex align-items-end gap-3 flex-wrap justify-content-end flex-grow-1">
         <div class="search-wrapper">
+            <label for="filter-nombre" class="form-label mb-1">Nombre</label>
+            <div class="input-group search-group">
+                <input type="text" id="filter-nombre" class="form-control" placeholder="Buscar por nombre">
+                <button id="filter-nombre-btn" class="btn btn-outline-primary" type="button">Buscar</button>
+            </div>
+        </div>
+        <div class="search-wrapper">
             <label for="filter-hostname" class="form-label mb-1">Hostname</label>
-            <div class="input-group hostname-group">
+            <div class="input-group search-group">
                 <input type="text" id="filter-hostname" class="form-control" placeholder="Buscar por hostname">
                 <button id="filter-hostname-btn" class="btn btn-outline-primary" type="button">Buscar</button>
             </div>
+        </div>
+        <div class="search-wrapper">
+            <label for="filter-estado" class="form-label mb-1">Estado</label>
+            <select id="filter-estado" class="form-select">
+                <option value="">Todos</option>
+            </select>
         </div>
         {% if current_user and current_user['role'] == 'admin' %}
         <div class="d-flex gap-2 admin-actions">
@@ -156,6 +169,7 @@
                             <tr>
                                 <th>ID</th>
                                 <th>Nombre</th>
+                                <th>Hostname</th>
                                 <th>Ubicaci&oacute;n</th>
                                 <th>Sede</th>
                                 <th>Categor&iacute;a</th>
@@ -166,7 +180,7 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td colspan="8" class="text-center text-muted">Sin registros para mostrar</td>
+                                <td colspan="9" class="text-center text-muted">Sin registros para mostrar</td>
                             </tr>
                         </tbody>
                     </table>

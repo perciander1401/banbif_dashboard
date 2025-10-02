@@ -5,6 +5,7 @@ import io
 import hashlib
 import secrets
 import unicodedata
+import re
 from collections import Counter
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -72,6 +73,7 @@ PENDING_STATUS = {
     "NO APLICA UPGRADE",
 }
 
+ISO_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 app = Flask(__name__)
 app.config.update(
@@ -212,22 +214,61 @@ def normalize_date(value: str) -> str:
     if not value:
         return ""
     from datetime import datetime
+
+    candidates = [value]
+    for separator in (" ", "T"):
+        if separator in value:
+            head = value.split(separator, 1)[0].strip()
+            if head:
+                candidates.append(head)
+
+    for candidate in list(candidates):
+        if len(candidate) >= 10:
+            slice_ = candidate[:10]
+            if len(slice_) == 10 and slice_[4] in ("-", "/", ".") and slice_ not in candidates:
+                candidates.append(slice_)
+
+    unique_candidates = []
+    for candidate in candidates:
+        candidate = candidate.strip()
+        if candidate and candidate not in unique_candidates:
+            unique_candidates.append(candidate)
+
+    for candidate in unique_candidates:
+        try:
+            dt = datetime.fromisoformat(candidate)
+        except ValueError:
+            pass
+        else:
+            return dt.date().isoformat()
+
     patterns = [
         "%Y-%m-%d",
-        "%d/%m/%Y",
-        "%m/%d/%Y",
         "%Y/%m/%d",
+        "%Y.%m.%d",
+        "%d/%m/%Y",
         "%d-%m-%Y",
+        "%m/%d/%Y",
         "%m-%d-%Y",
     ]
-    for pattern in patterns:
-        try:
-            dt = datetime.strptime(value, pattern)
+    for candidate in unique_candidates:
+        for pattern in patterns:
+            try:
+                dt = datetime.strptime(candidate, pattern)
+            except ValueError:
+                continue
             return dt.strftime("%Y-%m-%d")
-        except ValueError:
-            continue
+
     return value
 
+
+def coerce_iso_date(value: str) -> str:
+    if not value:
+        return ""
+    normalized = normalize_date(value)
+    if normalized and ISO_DATE_PATTERN.match(normalized):
+        return normalized
+    return ""
 
 
 CSV_FIELD_MAP = {
@@ -415,6 +456,10 @@ def build_filters_payload(filters: Dict[str, str]) -> Dict[str, Dict[str, List[s
             "options": [row[0] for row in rows],
             "selected": filters.get(field) or "",
         }
+    payload["estado"] = {
+        "options": STATUS_CHOICES,
+        "selected": filters.get("estado") or "",
+    }
     return payload
 
 
@@ -530,9 +575,13 @@ def api_summary():
         "ubicacion": request.args.get("ubicacion", "").strip() or None,
         "nom_sede": request.args.get("nom_sede", "").strip() or None,
         "categoria_trab": request.args.get("categoria_trab", "").strip() or None,
+        "estado": request.args.get("estado", "").strip() or None,
     }
-    fecha_inicio = request.args.get("fecha_inicio", "").strip() or None
-    fecha_fin = request.args.get("fecha_fin", "").strip() or None
+    raw_fecha_inicio = request.args.get("fecha_inicio", "").strip()
+    raw_fecha_fin = request.args.get("fecha_fin", "").strip()
+    fecha_inicio = coerce_iso_date(raw_fecha_inicio) or None
+    fecha_fin = coerce_iso_date(raw_fecha_fin) or None
+    nombre = request.args.get("nombre", "").strip() or None
     hostname = request.args.get("hostname", "").strip() or None
 
     query = (
@@ -545,7 +594,10 @@ def api_summary():
     params: List[str] = []
     for key, value in filters.items():
         if value:
-            conditions.append(f"{key} = ?")
+            if key == "estado":
+                conditions.append("UPPER(estado) = UPPER(?)")
+            else:
+                conditions.append(f"{key} = ?")
             params.append(value)
     if fecha_inicio:
         conditions.append("fecha_estado >= ?")
@@ -553,6 +605,9 @@ def api_summary():
     if fecha_fin:
         conditions.append("fecha_estado <= ?")
         params.append(fecha_fin)
+    if nombre:
+        conditions.append("UPPER(nombre_completo) LIKE UPPER(?)")
+        params.append(f"%{nombre}%")
     if hostname:
         conditions.append("hostname LIKE ?")
         params.append(f"%{hostname}%")
@@ -585,6 +640,7 @@ def api_summary():
                 "nombre_completo": row["nombre_completo"],
                 "ubicacion": row["ubicacion"],
                 "nom_sede": row["nom_sede"],
+                "hostname": row["hostname"],
                 "categoria_trab": row["categoria_trab"],
                 "estado": estado,
                 "estado_coordinacion": row["estado_coordinacion"],
@@ -599,7 +655,8 @@ def api_summary():
             }
         )
 
-    recent_updates = recent_updates[:10]
+    if not nombre:
+        recent_updates = recent_updates[:10]
 
     schedule_brands_counts = {
         date: {brand: count for brand, count in Counter(brands).items() if brand}
@@ -620,6 +677,9 @@ def api_summary():
             "fecha_fin": fecha_fin or "",
         },
         "hostname_filter": hostname or "",
+        "name_filter": nombre or "",
+        "estado_filter": filters.get("estado") or "",
+        "estado_options": STATUS_CHOICES,
     }
 
     return jsonify(data)
